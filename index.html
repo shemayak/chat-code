@@ -1,1 +1,165 @@
-test
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Firebase Self-Destructing Chat</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 0 20px;
+    }
+    #chatWindow {
+      border: 1px solid #ccc;
+      height: 400px;
+      overflow-y: auto;
+      padding: 15px;
+      margin-bottom: 10px;
+      background: #f9f9f9;
+      border-radius: 5px;
+    }
+    .message {
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      border-radius: 4px;
+      background: #e1ffd4;
+      width: fit-content;
+      max-width: 80%;
+    }
+    .system-msg {
+      font-style: italic;
+      color: #777;
+      background: none;
+    }
+    .input-area {
+      display: flex;
+      gap: 10px;
+    }
+    #messageInput {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    #sendBtn {
+      padding: 10px 20px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #sendBtn:hover {
+      background: #0056b3;
+    }
+    #usernameInput {
+      padding: 8px;
+      margin-bottom: 15px;
+      width: 200px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Self-Destructing Chat Room</h2>
+  
+  <label for="usernameInput">Your Name: </label>
+  <input type="text" id="usernameInput" value="User" placeholder="Enter your name..." />
+
+  <div id="chatWindow">
+    <div class="message system-msg">Welcome! Messages disappear from the database immediately after delivery.</div>
+  </div>
+
+  <div class="input-area">
+    <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off" />
+    <button id="sendBtn">Send</button>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, push, set, onChildAdded, remove } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    // Your Firebase Configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyDmyTC3MWk_i4kefgZbSnnlSpImO9w7yCg",
+      authDomain: "my-porject-2-47293.firebaseapp.com",
+      databaseURL: "https://my-porject-2-47293-default-rtdb.firebaseio.com",
+      projectId: "my-porject-2-47293",
+      storageBucket: "my-porject-2-47293.firebasestorage.app",
+      messagingSenderId: "827212742968",
+      appId: "1:827212742968:web:c3345bd5cc84c761cb41cd",
+      measurementId: "G-H7Z98XVEFT"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    
+    // Database Reference pointing to a 'messages' path
+    const chatRef = ref(db, "messages");
+
+    // DOM Elements
+    const chatWindow = document.getElementById("chatWindow");
+    const messageInput = document.getElementById("messageInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const usernameInput = document.getElementById("usernameInput");
+
+    // 1. SEND MESSAGE
+    async function sendMessage() {
+      const text = messageInput.value.trim();
+      const username = usernameInput.value.trim() || "Anonymous";
+
+      if (text === "") return;
+
+      try {
+        // Create a unique new location in 'messages' path
+        const newMsgRef = push(chatRef);
+        
+        // Save the message content
+        await set(newMsgRef, {
+          sender: username,
+          message: text,
+          timestamp: Date.now()
+        });
+
+        // Clear input box
+        messageInput.value = "";
+      } catch (error) {
+        console.error("Error sending message:", error);
+      }
+    }
+
+    // Send button click or pressing 'Enter' key
+    sendBtn.addEventListener("click", sendMessage);
+    messageInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
+
+    // 2. RECEIVE & INSTANTLY DELETE FROM FIREBASE
+    onChildAdded(chatRef, (snapshot) => {
+      const msgId = snapshot.key;
+      const data = snapshot.val();
+
+      // Append to the local UI chat window
+      const msgDiv = document.createElement("div");
+      msgDiv.classList.add("message");
+      msgDiv.innerHTML = `<strong>${data.sender}:</strong> ${data.message}`;
+      chatWindow.appendChild(msgDiv);
+
+      // Auto-scroll to the bottom of the chat window
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+
+      // --- SELF DESTRUCT MECHANISM ---
+      // Instantly delete this message node from Firebase so other people who log in later cannot see it.
+      const specificMsgRef = ref(db, `messages/${msgId}`);
+      remove(specificMsgRef).catch((error) => {
+        console.error("Error destroying message from cloud storage:", error);
+      });
+    });
+  </script>
+</body>
+</html>
